@@ -94,7 +94,7 @@ fn next_ents(r: &mut Raft<MemStorage>, s: &MemStorage) -> Vec<Entry> {
     r.raft_log.stable_to(last_idx, last_term);
     let ents = r.raft_log.next_entries();
     let committed = r.raft_log.committed;
-    r.raft_log.applied_to(committed);
+    r.commit_apply(committed);
     ents.unwrap_or_else(Vec::new)
 }
 
@@ -1141,7 +1141,7 @@ fn test_commit() {
         let mut sm = new_test_raft(1, vec![1], 5, 1, store);
         for (j, &v) in matches.iter().enumerate() {
             let id = j as u64 + 1;
-            if !sm.prs().get(id).is_some() {
+            if sm.prs().get(id).is_none() {
                 sm.set_progress(id, v, v + 1, false);
             }
         }
@@ -2730,7 +2730,7 @@ fn test_restore() {
     );
     assert_eq!(
         sm.prs().voter_ids(),
-        &s.get_metadata()
+        s.get_metadata()
             .get_conf_state()
             .get_nodes()
             .iter()
@@ -2945,7 +2945,7 @@ fn test_add_node() {
     r.add_node(2);
     assert_eq!(
         r.prs().voter_ids(),
-        &vec![1, 2].into_iter().collect::<FxHashSet<_>>()
+        vec![1, 2].into_iter().collect::<FxHashSet<_>>()
     );
 }
 
@@ -3022,7 +3022,7 @@ fn test_raft_nodes() {
         let r = new_test_raft(1, ids, 10, 1, new_storage());
         let voter_ids = r.prs().voter_ids();
         let wids = wids.into_iter().collect::<FxHashSet<_>>();
-        if voter_ids != &wids {
+        if voter_ids != wids {
             panic!("#{}: nodes = {:?}, want {:?}", i, voter_ids, wids);
         }
     }
@@ -3718,7 +3718,7 @@ fn test_learner_receive_snapshot() {
 
     n1.restore(s);
     let committed = n1.raft_log.committed;
-    n1.raft_log.applied_to(committed);
+    n1.commit_apply(committed);
 
     let mut network = Network::new(vec![Some(n1), Some(n2)]);
 
